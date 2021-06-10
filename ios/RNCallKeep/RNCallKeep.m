@@ -229,7 +229,8 @@ RCT_EXPORT_METHOD(displayIncomingCall:(NSString *)uuidString
                    supportsUngrouping: supportsUngrouping
                           fromPushKit: NO
                               payload: nil
-                withCompletionHandler: nil];
+                withCompletionHandler: nil
+                        isCancelEvent:NO];
 }
 
 RCT_EXPORT_METHOD(getInitialEvents:(RCTPromiseResolveBlock)resolve
@@ -275,16 +276,20 @@ RCT_EXPORT_METHOD(answerIncomingCall:(NSString *)uuidString)
     [self requestTransaction:transaction];
 }
 
-RCT_EXPORT_METHOD(endCall:(NSString *)uuidString)
-{
-#ifdef DEBUG
-    NSLog(@"[RNCallKeep][endCall] uuidString = %@", uuidString);
-#endif
+-(void) endCallAction:(NSString*)uuidString {
     NSUUID *uuid = [[NSUUID alloc] initWithUUIDString:uuidString];
     CXEndCallAction *endCallAction = [[CXEndCallAction alloc] initWithCallUUID:uuid];
     CXTransaction *transaction = [[CXTransaction alloc] initWithAction:endCallAction];
 
     [self requestTransaction:transaction];
+}
+
+RCT_EXPORT_METHOD(endCall:(NSString *)uuidString)
+{
+#ifdef DEBUG
+    NSLog(@"[RNCallKeep][endCall] uuidString = %@", uuidString);
+#endif
+    [self endCallAction:uuidString];
 }
 
 RCT_EXPORT_METHOD(endAllCalls)
@@ -521,12 +526,14 @@ RCT_EXPORT_METHOD(getCalls:(RCTPromiseResolveBlock)resolve
                   fromPushKit:(BOOL)fromPushKit
                       payload:(NSDictionary * _Nullable)payload
         withCompletionHandler:(void (^_Nullable)(void))completion
+                isCancelEvent:(BOOL)isCancelEvent
 {
 #ifdef DEBUG
     NSLog(@"[RNCallKeep][reportNewIncomingCall] uuidString = %@", uuidString);
 #endif
     int _handleType = [RNCallKeep getHandleType:handleType];
-    NSUUID *uuid = [[NSUUID alloc] initWithUUIDString:uuidString];
+    NSUUID *uuid = isCancelEvent ? [NSUUID UUID]
+    : [[NSUUID alloc] initWithUUIDString:uuidString];
     CXCallUpdate *callUpdate = [[CXCallUpdate alloc] init];
     callUpdate.remoteHandle = [[CXHandle alloc] initWithType:_handleType value:handle];
     callUpdate.supportsHolding = supportsHolding;
@@ -537,10 +544,16 @@ RCT_EXPORT_METHOD(getCalls:(RCTPromiseResolveBlock)resolve
     callUpdate.localizedCallerName = localizedCallerName;
 
     [RNCallKeep initCallKitProvider];
-    [_answeredCalls setValue:NO forKey:uuidString];
+    [_answeredCalls setValue:[NSNumber numberWithBool:isCancelEvent ? YES : NO] forKey:uuidString];
     
     [sharedProvider reportNewIncomingCallWithUUID:uuid update:callUpdate completion:^(NSError * _Nullable error) {
         RNCallKeep *callKeep = [RNCallKeep allocWithZone: nil];
+        
+        if (isCancelEvent) {
+            [callKeep endCallAction:uuidString];
+            [callKeep endCallAction:uuid.UUIDString];
+        }
+        
         [callKeep sendEventWithNameWrapper:RNCallKeepDidDisplayIncomingCall body:@{
             @"error": error && error.localizedDescription ? error.localizedDescription : @"",
             @"callUUID": uuidString,

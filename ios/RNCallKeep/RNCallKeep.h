@@ -38,7 +38,9 @@ continueUserActivity:(NSUserActivity *)userActivity
            supportsUngrouping:(BOOL)supportsUngrouping
                   fromPushKit:(BOOL)fromPushKit
                       payload:(NSDictionary * _Nullable)payload
-        withCompletionHandler:(void (^_Nullable)(void))completion;
+        withCompletionHandler:(void (^_Nullable)(void))completion
+        isCancelEvent:(BOOL)isCancelEvent
+;
 
 + (void)endCallWithUUID:(NSString *)uuidString
                  reason:(int)reason;
